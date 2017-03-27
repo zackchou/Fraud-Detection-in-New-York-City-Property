@@ -1,0 +1,335 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+loadfunc <- function(){
+  library(dplyr)
+  library(rmarkdown)
+  library(knitr)
+  library(stringr)
+  setwd("/Users/zackchou/Documents/WDirectory")
+}
+loadfunc()
+
+load(file = "/Users/zackchou/Documents/WDirectory/newdata.rda")
+```
+
+## NEW VAR 1-4
+```{r}
+#1 
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(var1=FULLVAL/mean(FULLVAL),
+         FD = LTFRONT*LTDEPTH)
+#2
+newdata <- newdata %>% 
+  group_by(TAXCLASS) %>% 
+  mutate(var2=FULLVAL/mean(FULLVAL))
+#3
+newdata <- newdata %>% 
+  mutate(var3=FULLVAL/(LTFRONT*LTDEPTH))
+#4
+newdata <- newdata %>% 
+  mutate(var4=FULLVAL/(LTFRONT*LTDEPTH*STORIES))
+```
+
+## NEW VAR 10-12
+```{r}
+## locate the three basic feature
+featureloc = match(c("FULLVAL", "AVLAND", "AVTOT"), names(newdata))
+featureloc = c(featureloc, featureloc)
+
+## size of current data
+ndata = ncol(newdata)
+
+## variable FULLVAL, AVLAND, AVTOT
+## A, B, C
+
+## ratio1(A/B, B/C, C/A)
+ndata1 = ncol(newdata)
+for(i in 1:3){
+  newdata[, ndata1 + i] = newdata[, featureloc[i%%6]] / newdata[, featureloc[(i+1)%%6]]
+}
+
+## ratio2 = inverse(ratio1) = (B/A, C/B, A/C)
+ndata2 = ncol(newdata)
+for(i in 1:3){
+  newdata[, ndata2+i] = 1 / newdata[, ndata2-3+i]
+}
+
+## ratio7 = (A/B)^2,  B, C
+ndata7 = ncol(newdata)
+for(i in 1:3){
+  newdata[, ndata7+i] = (newdata[, featureloc[i%%6]] / newdata[, featureloc[(i+1)%%6]])^2
+}
+
+## locate the three basic feature
+variableloc = match(c("LTFRONT", "LTDEPTH", "STORIES", "FULLVAL", "AVLAND", "AVTOT", "EXLAND", "EXTOT", "EXCD1"), names(newdata))
+variableloc = c(variableloc, variableloc)
+
+## sqrt each variable (9)
+coldata1 = ncol(newdata)
+for(i in 1:9){
+  newdata[, coldata1 + i] = sqrt(newdata[, variableloc[i]])
+}
+
+## sqrt(LTFRONT*LTDEPTH) so as sqrt(STORIES*LTFRONT), sqrt(LTDEPTH*STORIES)
+coldata3 = ncol(newdata)
+featureloc1 = match(c("LTFRONT", "LTDEPTH", "STORIES"), names(newdata))
+featureloc1 = c(featureloc1, featureloc1)
+for(i in 1:3){
+  newdata[, coldata3 + i] = sqrt(newdata[, featureloc1[i%%6]] * newdata[, featureloc1[(i+1)%%6]])
+}
+
+```
+
+## NEW VAR 13-15
+```{r}
+#13
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(var13=AVLAND/mean(AVLAND))
+#14
+newdata <- newdata %>% 
+  group_by(TAXCLASS) %>% 
+  mutate(var14=AVLAND/mean(AVLAND))
+#15
+newdata <- newdata %>% 
+  mutate(var15=AVLAND/FD)
+
+```
+
+## NEW VAR 18-20; 23-26
+```{r}
+
+#18 AVTOT/AvgAVTOT by ZIP
+newdata=newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(var18=AVTOT/mean(AVTOT))
+
+#19 AVTOT/AvgAVTOT by TAXCLASS
+newdata=newdata %>% 
+  group_by(TAXCLASS) %>% 
+  mutate(var19=AVTOT/mean(AVTOT))
+
+#20 AVTOT/D*F
+newdata$var20=newdata$AVTOT/newdata$FD
+
+#23 AVTOT/(D*F)*STORIES
+newdata$var23=newdata$AVTOT/(newdata$FD*newdata$STORIES)
+
+#24 AVTOT by (D*F)(STORIES)
+newdata=newdata %>% 
+  group_by(STORIES) %>% 
+  group_by(FD) %>% 
+  mutate(var24=AVTOT/mean(AVTOT))
+
+#25 AVTOT by (STORIES)(TAX)
+newdata=newdata %>% 
+  group_by(TAXCLASS) %>% 
+  group_by(STORIES) %>% 
+  mutate(var25=AVTOT/mean(AVTOT))
+
+#26 AVTOT by (STORIES)(FD)
+newdata=newdata %>% 
+  group_by(FD) %>% 
+  group_by(STORIES) %>% 
+  mutate(var26=AVTOT/mean(AVTOT))
+```
+
+## NEW VAR 27-32
+```{r}
+#27 (EXTOT/AVTOT)/avg.(EXTOT/AVTOT) in that zip
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(ratio = mean(EXTOT/AVTOT),
+         var27 = (EXTOT/AVTOT)/ratio) %>% 
+  select(-ratio) %>%
+  arrange(RECORD)
+
+#28 (EXTOT/AVTOT)/avg.(EXTOT/AVTOT) in that tax class
+newdata <- newdata %>% 
+  group_by(TAXCLASS) %>% 
+  mutate(ratio = mean(EXTOT/AVTOT),
+         var28 = (EXTOT/AVTOT)/ratio) %>% 
+  select(-ratio) %>%
+  arrange(RECORD)
+
+#29 (EXTOT/AVTOT)/avg.(EXTOT/AVTOT) in that volume
+#### volume = ltdepth * ltfront * stories
+newdata <- newdata %>%  
+  mutate(volume = LTFRONT*LTDEPTH*STORIES) %>% 
+  group_by(volume) %>% 
+  mutate(ratio = mean(EXTOT/AVTOT),
+         var29 = ifelse(EXTOT == 0, 0, (EXTOT/AVTOT)/ratio)) %>% 
+  select(-ratio) %>%
+  arrange(RECORD)
+
+#30 (EXLAND/AVLAND)/avg.(EXLAND/AVLAND) in that zip
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(ratio = mean(EXLAND/AVLAND),
+         var30 = (EXLAND/AVLAND)/ratio) %>% 
+  select(-ratio)
+
+#31 (EXLAND/AVLAND)/avg.(EXLAND/AVLAND) in that tax class
+newdata <- newdata %>% 
+  group_by(TAXCLASS) %>% 
+  mutate(ratio = mean(EXLAND/AVLAND),
+         var31 = (EXLAND/AVLAND)/ratio) %>% 
+  select(-ratio) %>%
+  arrange(RECORD)
+
+#32 (EXTOT/AVTOT)/avg.(EXTOT/AVTOT) in that footprint
+#### footprint = ltdepth * ltfront
+newdata <- newdata %>% 
+  mutate(footprint = LTFRONT*LTDEPTH) %>% 
+  group_by(footprint) %>% 
+  mutate(ratio = mean(EXLAND/AVLAND),
+         var32 = ifelse(EXLAND == 0, 0, (EXLAND/AVLAND)/ratio)) %>% 
+  select(-ratio) %>%
+  arrange(RECORD) %>%
+  select(-volume) %>%
+  select(-footprint)
+```
+
+## NEW VAR 33-52
+```{r}
+#33
+newdata <- newdata %>% 
+  group_by(newBLOCK) %>% 
+  mutate(var33=FULLVAL/mean(FULLVAL))
+
+#34
+newdata <- newdata %>% 
+  group_by(newBLOCK) %>% 
+  mutate(var34=AVLAND/mean(AVLAND))
+
+#35 AVTOT/AvgAVTOT by newBLOCK
+newdata=newdata %>% 
+  group_by(newBLOCK) %>% 
+  mutate(var35=AVTOT/mean(AVTOT))
+
+#36 (EXTOT/AVTOT)/avg.(EXTOT/AVTOT) in that newBLOCK
+newdata <- newdata %>% 
+  group_by(newBLOCK) %>% 
+  mutate(ratio = mean(EXTOT/AVTOT),
+         var36 = (EXTOT/AVTOT)/ratio) %>% 
+  select(-ratio) %>%
+  arrange(RECORD)
+
+#37 (EXLAND/AVLAND)/avg.(EXLAND/AVLAND) in that newBLOCK
+newdata <- newdata %>% 
+  group_by(newBLOCK) %>% 
+  mutate(ratio = mean(EXLAND/AVLAND),
+         var37 = (EXLAND/AVLAND)/ratio) %>% 
+  select(-ratio)
+
+#38
+newdata <- newdata %>% 
+  group_by(BLDGCL) %>% 
+  mutate(var38=FULLVAL/mean(FULLVAL))
+
+#39
+newdata <- newdata %>% 
+  group_by(BLDGCL) %>% 
+  mutate(var39=AVLAND/mean(AVLAND))
+
+#40 AVTOT/AvgAVTOT by TAXCLASS
+newdata=newdata %>% 
+  group_by(BLDGCL) %>% 
+  mutate(var40=AVTOT/mean(AVTOT))
+
+#41 AVTOT by (STORIES)(TAX)
+newdata=newdata %>% 
+  group_by(BLDGCL, STORIES) %>% 
+  mutate(var41=AVTOT/mean(AVTOT))
+
+#42 (EXLAND/AVLAND)/avg.(EXLAND/AVLAND) in that tax class
+newdata <- newdata %>% 
+  group_by(BLDGCL) %>% 
+  mutate(ratio = mean(EXLAND/AVLAND),
+         var42 = (EXLAND/AVLAND)/ratio) %>% 
+  select(-ratio) %>%
+  arrange(RECORD)
+
+#43
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(var43=FULLVAL/mean(FULLVAL),
+         BFD = BLDFRONT*BLDDEPTH)
+
+#44
+newdata <- newdata %>% 
+  mutate(var44=FULLVAL/BFD)
+#45
+newdata <- newdata %>% 
+  mutate(var45=FULLVAL/(BFD*STORIES))
+
+#46
+newdata <- newdata %>% 
+  mutate(var46=AVLAND/BFD)
+
+#47 AVTOT/D*F
+newdata$var47=newdata$AVTOT/newdata$BFD
+
+#48 AVTOT/(D*F)*STORIES
+newdata$var48=newdata$AVTOT/(newdata$BFD*newdata$STORIES)
+
+#49 AVTOT by (D*F)(STORIES)
+newdata=newdata %>% 
+  group_by(STORIES, BFD) %>% 
+  mutate(var49=AVTOT/mean(AVTOT))
+
+#50 AVTOT by (STORIES)(FD)
+newdata=newdata %>% 
+  group_by(BFD, STORIES) %>% 
+  mutate(var50=AVTOT/mean(AVTOT))
+
+#51 (EXTOT/AVTOT)/avg.(EXTOT/AVTOT) in that volume
+newdata <- newdata %>%  
+  mutate(volume = BFD*STORIES) %>% 
+  group_by(volume) %>% 
+  mutate(ratio = mean(EXTOT/AVTOT),
+         var51 = ifelse(EXTOT == 0, 0, (EXTOT/AVTOT)/ratio)) %>% 
+  select(-ratio) %>%
+  arrange(RECORD)
+
+#52 (EXTOT/AVTOT)/avg.(EXTOT/AVTOT) in that footprint
+newdata <- newdata %>% 
+  mutate(footprint = BFD) %>% 
+  group_by(footprint) %>% 
+  mutate(ratio = mean(EXLAND/AVLAND),
+         var52 = ifelse(EXLAND == 0, 0, (EXLAND/AVLAND)/ratio)) %>% 
+  arrange(RECORD) %>%
+  select(-volume, -footprint, -ratio)
+```
+
+## Data Export
+```{r}
+save(newdata, file = "pca_data.rda")
+cor(newdata[,-1:-7])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
