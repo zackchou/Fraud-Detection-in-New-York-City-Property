@@ -1,0 +1,194 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+loadlibraries <- function(){
+  library(dplyr)
+  library(tidyr)
+  setwd("/Users/zackchou/Documents/WDirectory")
+}
+loadlibraries()
+
+load("/Users/zackchou/Documents/WDirectory/nyp.rda")
+joindata <- nyp %>% 
+  select(1:2)
+newdata <- read.csv("/Users/zackchou/Documents/WDirectory/data_lowscore.csv")
+newdata <- left_join(newdata, joindata, by = c("RECORD"))
+newdata <- newdata[,c(23, 1:22)]
+newdata <- newdata[,-3]
+
+newdata$BBLE <- as.character(newdata$BBLE)
+newdata <- separate(newdata, BBLE, into = c("newBLOCK", "rest"), sep = 6)
+```
+
+# Patching missing values
+
+##FULLVAL
+```{r}
+newdata <- newdata %>% 
+  group_by(newBLOCK) %>% 
+  mutate(avg_fv = mean(FULLVAL))
+
+newdata$FULLVAL <- ifelse(newdata$FULLVAL == 0, round(newdata$avg_fv, 0), newdata$FULLVAL)
+
+newdata <- newdata %>% 
+  select(-avg_fv)
+
+any(is.na(newdata$FULLVAL))
+min(newdata$FULLVAL)
+```
+
+##AVLAND
+```{r}
+newdata <- newdata %>% 
+  group_by(newBLOCK) %>% 
+  mutate(avg_avl = mean(AVLAND))
+
+newdata$AVLAND <- ifelse(newdata$AVLAND == 0, round(newdata$avg_avl, 0), newdata$AVLAND)
+
+newdata <- newdata %>% 
+  select(-avg_avl)
+
+any(is.na(newdata$AVLAND))
+min(newdata$AVLAND)
+```
+
+##ZIP
+```{r}
+newdata$ZIP <- ifelse(newdata$ZIP== 0, 99999, newdata$ZIP)
+
+any(is.na(newdata$ZIP))
+min(newdata$ZIP)
+```
+
+##STORIES
+```{r}
+newdata <- newdata %>%
+  group_by(newBLOCK) %>% 
+  mutate(avg_s = mean(STORIES)) 
+
+newdata$STORIES <- ifelse(newdata$STORIES == 0, round(newdata$avg_s, 0), newdata$STORIES)
+
+newdata <- newdata %>% 
+  group_by(BLDGCL) %>% 
+  mutate(avg_s1 = mean(STORIES))
+
+newdata$STORIES <- ifelse(newdata$STORIES == 0, round(newdata$avg_s1, 0), newdata$STORIES)
+
+newdata <- newdata %>% 
+  select(-avg_s, -avg_s1)
+
+abc <- newdata %>% 
+  filter(LTFRONT == 0)
+
+
+any(is.na(newdata$STORIES))
+min(newdata$STORIES)
+```
+
+##LTFRONT
+```{r}
+newdata <- newdata %>%
+  group_by(newBLOCK) %>% 
+  mutate(avg_f = mean(LTFRONT)) 
+
+newdata$LTFRONT <- ifelse(newdata$LTFRONT == 0, round(newdata$avg_f, 0), newdata$LTFRONT)
+
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(avg_f1 = mean(LTFRONT))
+
+newdata$LTFRONT <- ifelse(newdata$LTFRONT == 0, round(newdata$avg_f1, 0), newdata$LTFRONT)
+
+newdata <- newdata %>% 
+  select(-avg_f, -avg_f1)
+
+any(is.na(newdata$LTFRONT))
+min(newdata$LTFRONT)
+```
+
+##LTDEPTH
+```{r}
+newdata <- newdata %>%
+  group_by(newBLOCK) %>% 
+  mutate(avg_d = mean(LTDEPTH)) 
+
+newdata$LTDEPTH <- ifelse(newdata$LTDEPTH == 0, round(newdata$avg_d, 0), newdata$LTDEPTH)
+
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(avg_d1 = mean(LTDEPTH))
+
+newdata$LTDEPTH <- ifelse(newdata$LTDEPTH == 0, round(newdata$avg_d1, 0), newdata$LTDEPTH)
+
+newdata <- newdata %>% 
+  select(-avg_d, -avg_d1)
+
+any(is.na(newdata$LTDEPTH))
+min(newdata$LTDEPTH)
+```
+
+##BLDFRONT
+```{r}
+newdata <- newdata %>%
+  group_by(newBLOCK) %>% 
+  mutate(avg_bf = mean(BLDFRONT)) 
+
+newdata$BLDFRONT <- ifelse(newdata$BLDFRONT == 0, round(newdata$avg_bf, 0), newdata$BLDFRONT)
+
+newdata <- newdata %>% 
+  group_by(BLDGCL) %>% 
+  mutate(avg_bf1 = mean(BLDFRONT))
+
+newdata$BLDFRONT <- ifelse(newdata$BLDFRONT == 0, round(newdata$avg_bf1, 0), newdata$BLDFRONT)
+
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(avg_bf2 = mean(BLDFRONT))
+
+newdata$BLDFRONT <- ifelse(newdata$BLDFRONT == 0, round(newdata$avg_bf2, 0), newdata$BLDFRONT)
+
+newdata <- newdata %>% 
+  select(-avg_bf, -avg_bf1, -avg_bf2)
+
+any(is.na(newdata$BLDFRONT))
+min(newdata$BLDFRONT)
+```
+
+##BLDDEPTH
+```{r}
+newdata <- newdata %>%
+  group_by(newBLOCK) %>% 
+  mutate(avg_bd = mean(BLDDEPTH)) 
+
+newdata$BLDDEPTH <- ifelse(newdata$BLDDEPTH == 0, round(newdata$avg_bd, 0), newdata$BLDDEPTH)
+
+newdata <- newdata %>% 
+  group_by(BLDGCL) %>% 
+  mutate(avg_bd1 = mean(BLDDEPTH))
+
+newdata$BLDDEPTH <- ifelse(newdata$BLDDEPTH == 0, round(newdata$avg_bd1, 0), newdata$BLDDEPTH)
+
+newdata <- newdata %>% 
+  group_by(ZIP) %>% 
+  mutate(avg_bd2 = mean(BLDDEPTH))
+
+newdata$BLDDEPTH <- ifelse(newdata$BLDDEPTH == 0, round(newdata$avg_bd2, 0), newdata$BLDDEPTH)
+
+newdata <- newdata %>% 
+  select(-avg_bd, -avg_bd1, -avg_bd2)
+
+any(is.na(newdata$BLDDEPTH))
+min(newdata$BLDDEPTH)
+```
+
+##Export data
+```{r}
+save(newdata, file = "newdata.rda")
+```
+
+
+
+
+
