@@ -1,0 +1,184 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+load(file = "/Users/zackchou/Documents/WDirectory/pca_data.rda")
+
+colnames(pca_data_fixed)
+pca_data_fixed <- pca_data %>% select(-X, -RECORD, -BLOCK, -LOT, -BLDGCL, -TAXCLASS, -ZIP, -FD, -ratio, -volume)
+pca_data_fixed <- pca_data_fixed[,-1]
+pca_data_fixed <- pca_data_fixed[,-22]
+
+save(pca_data_fixed, file = "pca_data_fixed.rda")
+```
+
+## PCA
+```{r}
+pca_data = as.data.frame(pca_data_fixed)[c(-2)]
+
+# Divide orginal data into two
+## Transform NA into 0 in data
+n1 = nrow(pca_data); n2 = ncol(pca_data);
+
+for(i in c(1:n2)){
+  pca_data[, i] = ifelse(is.na(pca_data[, i]), 0, pca_data[, i])
+}
+
+## Z-Scale
+pca_data_bef_z = pca_data
+n_bef_z = ncol(pca_data_bef_z)
+for(i in 1:n_bef_z){
+  stand_deviation_bef_z = sd(pca_data_bef_z[,i])
+  mean_bef_z = mean(pca_data_bef_z[,i])
+  pca_data_bef_z[,i] = (pca_data_bef_z[,i] - mean_bef_z) / stand_deviation_bef_z
+}
+
+## check the correlation (in case of correlation = 1 between different variables)
+## correlation = cor(pca_data_bef_z)
+## save(correlation, file = "correlation.csv")
+pca_data_input = pca_data_bef_z
+
+## PCA
+pca_result = prcomp(pca_data_input, center = F, scale = F)
+## if we do not do z-scale manually, we use "center = T, scale = T" and get the same output
+print(pca_result) ## standard deviations
+plot(pca_result, xlab = "Principal Component")
+sum(pca_result$sdev[1:13]^2)/ sum(pca_result$sdev^2)
+## composition of each PC
+pca_result$rotation
+
+## compute standard deviation of each principal component
+std_dev = pca_result$sdev
+## compute variance
+pc_var <- std_dev^2
+## check variance of first 20 components
+pc_var[1:20]
+## proportion of variance explained
+prop_var_ex <- pc_var/sum(pc_var)
+prop_var_ex[1:20]
+```
+
+## PCA visualization
+```{r}
+devtools::install_github("kassambara/factoextra")
+library(factoextra)
+library(FactoMineR)
+
+nyp_pca <- PCA(pca_data_fixed, scale.unit = T, graph = F)
+nyp_pca$eig[1:20,]
+
+a <- fviz_screeplot(nyp_pca, ncp = 10)
+ggsave(a,filename = "a.jpg")
+nyp_pca$var$contrib
+
+b <- fviz_pca_contrib(nyp_pca, choice = "var", axes = 1, top = 30)
+ggsave(b,filename = "b.jpg")
+c <- fviz_pca_contrib(nyp_pca, choice = "var", axes = 2, top = 30)
+ggsave(c,filename = "c.jpg")
+
+fviz_pca_ind(nyp_pca, label = "none")
+fviz_pca_var(nyp_pca) +
+scale_color_gradient2(low="white", mid="pink", 
+                  high="red", midpoint=50) + theme_minimal()
+
+fviz_pca_ind(nyp_pca, geom = "point", col.ind="cos2")
+fviz_pca_biplot(nyp_pca, geom = "point")
+```
+
+## Dimension Reduction
+```{r}
+## Score
+## top 13
+n_top = 13
+## calculate the transformed record metric
+## now what we have are the projection value of orginal dataset on the new n_top PC directions.
+pca_matrix = predict(pca_result, newdata = pca_data_input) ## score of each record based on new pcs
+## prcomp returns a list with class "prcomp" containing the following components:
+## sdev, rotation, x, cenrter, scale
+dim(pca_matrix)
+## extract top 13 pcs in pca_matrix
+pca_matrix_13 = as.data.frame(pca_matrix)[,c(1:n_top)]
+## scale the pca_13
+
+## we don't have to z-scale  again
+pca_z = as.data.frame((pca_matrix_13))
+pca_z_ae = pca_z
+## score = sum of projections on the 10th directions
+pca_z$Total_score = sqrt(rowSums(pca_z[, c(1:n_top)]^2))
+pca_z$ID = 1:nrow(pca_z)
+## descendingly reorder the data 
+### index
+sorted_index = order(pca_z$Total_score, decreasing = T) 
+### reorder
+pca_z_order = pca_z[sorted_index, ]
+head(pca_z_order,10)
+pca_ID_10000 = pca_z_order$ID[1:10000]
+```
+
+## Autoencoder
+```{r}
+library(h2o)
+## input data
+pca_z_ae
+## set autoencoder
+localH2O = h2o.init()
+feature_names = names(pca_z_ae)
+prostate.hex<-as.h2o(pca_z_ae, destination_frame="train.hex")
+prostate.dl = h2o.deeplearning(x = feature_names, training_frame = prostate.hex,
+                               autoencoder = TRUE,
+                               reproducible = T,
+                               seed = 1234,
+                               hidden = c(5,5), epochs = 50)
+
+# MSE of each record
+# head(prostate.anon)
+prostate.anon = h2o.anomaly(prostate.dl, prostate.hex, per_feature=FALSE)
+head(prostate.anon)
+err <- as.data.frame(prostate.anon)
+
+ae_err = data.frame(pca_z_ae,err)
+ae_err$ID = 1:nrow(ae_err)
+## descendingly reorder the data 
+### index
+sorted_index_ae = order(ae_err$Reconstruction.MSE, decreasing = T) 
+### reorder
+ae_err_order = ae_err[sorted_index_ae, ]
+head(ae_err_order,10)
+ae_ID_10000 = ae_err_order$ID[1:10000]
+
+similarity = match(ae_ID_10000, pca_ID_10000)
+similarity
+for(i in 1:10000){
+  similarity[i] = ifelse(is.na(similarity[i]), 0, 1)
+}
+overlap_prop = sum(similarity)/10000
+## 76.07 %
+
+library(ggplot2)
+ggplot(data = ae_err_order, aes(x = Reconstruction.MSE)) + 
+  geom_histogram(bins = 100) + 
+  scale_x_log10() +
+  scale_y_sqrt() + 
+  ggtitle("Distribution of MSE with Autoencoder")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
